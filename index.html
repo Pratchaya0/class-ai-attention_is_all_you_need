@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transformer Next-Token Prediction Visualizer</title>
+<style>
+  :root{
+    --viz-panel:#ffffff;--viz-card:#ffffff;--viz-chip-card:#f5f5f5;--viz-text:#111827;--viz-muted:#6b7280;
+    --viz-border:#d1d5db;--viz-accent:#2563eb;--viz-accent-text:#ffffff;--viz-accent-bg:#dbeafe;
+    --viz-accent-bg-subtle:#eff6ff;--viz-series-1:#2563eb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f8fafc;color:var(--viz-text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  main{max-width:1100px;margin:0 auto;padding:24px}
+  h1{font-size:28px;margin:0 0 6px}
+  h2{font-size:18px;margin:0}
+  p{margin:.4rem 0}
+  .sub{color:var(--viz-muted);margin-bottom:20px}
+  .space{display:grid;gap:20px}
+  .grid2{display:grid;grid-template-columns:1.4fr .6fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .grid-half{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .card,.metric-card{border:1px solid var(--viz-border);background:#fff;border-radius:16px;padding:16px}
+  .metric-card .big{font-size:24px;font-weight:700}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .row input[type="text"]{flex:1;min-width:220px}
+  input[type="text"]{width:100%;border:1px solid var(--viz-border);border-radius:12px;padding:10px 12px;font-size:16px}
+  button{border:1px solid var(--viz-border);background:#fff;border-radius:12px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer}
+  button.primary{background:var(--viz-accent);color:var(--viz-accent-text);border-color:var(--viz-accent)}
+  label{font-weight:600;display:block;margin-bottom:8px}
+  input[type="range"]{width:100%}
+  .muted{color:var(--viz-muted);font-size:14px}
+  .stage-node{border:1px solid var(--viz-border);border-radius:999px;padding:.45rem .7rem;white-space:nowrap;background:var(--viz-panel);font-size:.875rem}
+  .stage-node.active{background:var(--viz-accent);color:var(--viz-accent-text);border-color:var(--viz-accent)}
+  .stage-node.done{background:var(--viz-accent-bg);border-color:var(--viz-accent)}
+  .token-chip{border:1px solid var(--viz-border);border-radius:.7rem;padding:.4rem .65rem;background:var(--viz-chip-card)}
+  .vector{display:grid;grid-template-columns:110px 1fr;gap:.75rem;align-items:center}
+  .vector-bars{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;align-items:end;height:42px}
+  .vector-bars span{display:block;border-radius:4px 4px 2px 2px;background:var(--viz-series-1);opacity:.78}
+  .att-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:6px}
+  .att-cell{border:1px solid var(--viz-border);padding:.55rem;text-align:center;border-radius:4px}
+  .callout{border:1px solid var(--viz-accent);background:var(--viz-accent-bg-subtle);border-radius:12px;padding:12px}
+  .viz-node{border:1px solid var(--viz-border);border-radius:12px;padding:12px;text-align:center;background:#fff;flex:1}
+  .prob-track{height:10px;border-radius:999px;background:var(--viz-chip-card);overflow:hidden}
+  .prob-fill{height:100%;background:var(--viz-accent);border-radius:inherit;transition:width .25s ease}
+  .prob-row{display:grid;gap:6px}
+  .prob-top{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+  .generated{border:1px solid var(--viz-border);background:var(--viz-accent-bg-subtle);border-radius:14px;padding:16px}
+  .generated .text{font-size:20px;font-weight:700;margin-top:4px}
+  footer{border-top:1px solid var(--viz-border);padding-top:14px;color:var(--viz-muted);font-size:13px}
+  @media(max-width:760px){
+    main{padding:16px}
+    .grid2,.grid3,.grid-half{grid-template-columns:1fr}
+    .vector{grid-template-columns:80px 1fr}
+  }
+</style>
+</head>
+<body>
+<main class="space">
+  <header>
+    <h1>Transformer Next-Token Prediction Visualizer</h1>
+    <p class="sub">Educational simulation สำหรับดูการไหลของข้อมูลตั้งแต่ Tokenization → Attention → Softmax → Next Token</p>
+  </header>
+
+  <section class="grid2">
+    <div class="card">
+      <label for="prompt">ข้อความเริ่มต้น</label>
+      <div class="row">
+        <input id="prompt" type="text" value="I love" aria-label="ข้อความเริ่มต้น">
+        <button id="applyBtn" type="button">Apply</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="stepBtn" type="button" class="primary">Step</button>
+        <button id="playBtn" type="button">▶ Play</button>
+        <button id="nextBtn" type="button">Generate Next Token</button>
+        <button id="resetBtn" type="button">Reset</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="temperature">Temperature: <span id="tempValue">1.0</span></label>
+      <input id="temperature" type="range" min="0.2" max="2" value="1" step="0.1">
+      <p class="muted">ต่ำ = เลือกคำที่มั่นใจกว่า · สูง = กระจายความน่าจะเป็นมากขึ้น</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="row" id="pipeline"></div>
+  </section>
+
+  <section class="grid3">
+    <div class="metric-card">
+      <div class="muted">Current stage</div>
+      <div id="stageName" style="font-weight:600">Input</div>
+    </div>
+    <div class="metric-card">
+      <div class="muted">Tokens</div>
+      <div id="tokenCount" class="big">2</div>
+    </div>
+    <div class="metric-card">
+      <div class="muted">Predicted token</div>
+      <div id="prediction" style="font-weight:600">—</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>1. Tokenization</h2>
+    <div id="tokens" class="row" style="margin-top:10px"></div>
+    <p id="tokenExplain" class="muted">ประโยคถูกแบ่งออกเป็น token ก่อนเข้า Transformer</p>
+  </section>
+
+  <section>
+    <h2>2. Embedding + Positional Encoding</h2>
+    <div id="embeddingRows" class="space" style="gap:8px;margin-top:10px"></div>
+    <p class="muted">Embedding แปลง token เป็นตัวเลข ส่วน Positional Encoding เพิ่มข้อมูลว่า token อยู่ตำแหน่งไหน</p>
+  </section>
+
+  <section>
+    <h2>3. Self-Attention</h2>
+    <p class="muted">Q (Query) = สิ่งที่กำลังหา · K (Key) = ใช้เทียบความเกี่ยวข้อง · V (Value) = ข้อมูลที่จะถูกดึงมาใช้</p>
+    <div class="att-wrap">
+      <table>
+        <thead id="attentionHead"></thead>
+        <tbody id="attentionBody"></tbody>
+      </table>
+    </div>
+    <div id="attentionInsight" class="callout">กด Step ไปที่ Self-Attention เพื่อดูว่าคำสุดท้ายสนใจ token ไหนมากที่สุด</div>
+  </section>
+
+  <section class="grid-half">
+    <div>
+      <h2>4. Feed Forward Network</h2>
+      <div class="row" style="margin-top:10px">
+        <div class="viz-node">Attention output</div>
+        <span>→</span>
+        <div class="viz-node">FFN</div>
+        <span>→</span>
+        <div class="viz-node">Hidden state</div>
+      </div>
+      <p class="muted">FFN (Feed-Forward Network) ประมวลผล representation ของแต่ละ token เพิ่มเติมหลัง Attention</p>
+    </div>
+
+    <div>
+      <h2>5. Logits → Softmax</h2>
+      <div id="probabilities" class="space" style="gap:12px;margin-top:10px"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>6. Next-Token Prediction</h2>
+    <div class="generated" style="margin-top:10px">
+      <div class="muted">Generated sequence</div>
+      <div id="generatedText" class="text">I love</div>
+    </div>
+    <p id="explanation" class="muted" aria-live="polite">กด Step เพื่อดูข้อมูลไหลผ่าน Transformer ทีละขั้น</p>
+  </section>
+
+  <footer>
+    Educational simulation — ตัวเลข Embedding, Attention และ Logits ถูกจำลองเพื่ออธิบายแนวคิด ไม่ใช่ค่าจากโมเดลจริง
+  </footer>
+</main>
+
+<script>
+(() => {
+  const stages = [
+    ['Input','Input Text'],
+    ['Tokenize','Tokenization'],
+    ['Embed','Embedding'],
+    ['Position','Positional Encoding'],
+    ['Attention','Self-Attention'],
+    ['MultiHead','Multi-Head Attention'],
+    ['FFN','Feed-Forward Network'],
+    ['Logits','Logits'],
+    ['Softmax','Softmax'],
+    ['Predict','Next Token']
+  ];
+
+  const continuations = {
+    'love': [['programming',4.3],['you',3.7],['this',3.2],['pizza',2.4],['learning',2.1]],
+    'programming': [['because',4.0],['and',3.4],['.',2.8],['with',2.6],['every',2.2]],
+    'because': [['it',4.2],['I',3.6],['coding',2.8],['software',2.3],['technology',2.0]],
+    'it': [['is',4.5],['helps',3.2],['makes',2.8],['can',2.5],['feels',2.1]],
+    'is': [['fun',4.2],['powerful',3.7],['useful',3.3],['creative',2.9],['challenging',2.5]],
+    'fun': [['.',4.2],['and',3.1],['!',2.9],['to',2.5],['because',2.1]],
+    'default': [['the',4.0],['a',3.5],['is',3.1],['and',2.7],['to',2.3]]
+  };
+
+  let tokens = [];
+  let initial = '';
+  let stage = 0;
+  let playing = false;
+  let timer = null;
+  let probs = [];
+
+  const $ = id => document.getElementById(id);
+
+  function tokenize(text){
+    return text.trim().split(/\s+/).filter(Boolean);
+  }
+
+  function hash(str){
+    let h = 2166136261;
+    for(const ch of str){ h ^= ch.charCodeAt(0); h = Math.imul(h,16777619); }
+    return Math.abs(h >>> 0);
+  }
+
+  function vectorFor(token,index){
+    const h = hash(token + ':' + index);
+    return Array.from({length:6},(_,i)=>(((h >> (i*3)) & 31)/31)*1.6-0.8);
+  }
+
+  function attentionMatrix(){
+    return tokens.map((q,qi)=>{
+      const raw = tokens.map((k,ki)=>{
+        const locality = 1 / (1 + Math.abs(qi-ki));
+        const semantic = ((hash(q+'|'+k)%100)/100)*.9 + .1;
+        return locality * semantic;
+      });
+      const sum = raw.reduce((a,b)=>a+b,0);
+      return raw.map(x=>x/sum);
+    });
+  }
+
+  function softmaxCandidates(){
+    const last = (tokens[tokens.length-1] || '').replace(/[.,!?]/g,'').toLowerCase();
+    const list = continuations[last] || continuations.default;
+    const t = Number($('temperature').value);
+    const exps = list.map(([word,logit])=>[word,Math.exp(logit/t),logit]);
+    const total = exps.reduce((s,x)=>s+x[1],0);
+    return exps.map(([word,e,logit])=>({word,p:e/total,logit})).sort((a,b)=>b.p-a.p);
+  }
+
+  function renderPipeline(){
+    const host = $('pipeline');
+    host.innerHTML='';
+    stages.forEach((s,i)=>{
+      const node=document.createElement('div');
+      node.className='stage-node'+(i===stage?' active':i<stage?' done':'');
+      node.textContent=s[0];
+      host.appendChild(node);
+      if(i<stages.length-1){
+        const arrow=document.createElement('span');
+        arrow.textContent='→';
+        arrow.style.color='var(--viz-muted)';
+        host.appendChild(arrow);
+      }
+    });
+    $('stageName').textContent=stages[stage][1];
+  }
+
+  function renderTokens(){
+    $('tokens').innerHTML='';
+    tokens.forEach((t,i)=>{
+      const chip=document.createElement('span');
+      chip.className='token-chip';
+      chip.innerHTML='<span class="muted">#'+i+'</span> '+escapeHtml(t);
+      $('tokens').appendChild(chip);
+    });
+    $('tokenCount').textContent=tokens.length;
+  }
+
+  function renderEmbeddings(){
+    const host=$('embeddingRows'); host.innerHTML='';
+    tokens.forEach((token,i)=>{
+      const row=document.createElement('div'); row.className='vector';
+      const label=document.createElement('div'); label.className='muted'; label.textContent=token+'  pos:'+i;
+      const bars=document.createElement('div'); bars.className='vector-bars';
+      vectorFor(token,i).forEach(v=>{
+        const b=document.createElement('span');
+        b.style.height=(10+Math.abs(v)*28)+'px';
+        b.style.opacity=String(.35+Math.abs(v)*.65);
+        b.title=v.toFixed(3);
+        bars.appendChild(b);
+      });
+      row.append(label,bars); host.appendChild(row);
+    });
+  }
+
+  function renderAttention(){
+    const matrix=attentionMatrix();
+    const head=$('attentionHead'); const body=$('attentionBody');
+    head.innerHTML=''; body.innerHTML='';
+    const tr=document.createElement('tr');
+    tr.innerHTML='<th style="text-align:left">Q ↓ / K →</th>';
+    tokens.forEach(t=>{const th=document.createElement('th');th.textContent=t;tr.appendChild(th)});
+    head.appendChild(tr);
+    matrix.forEach((row,ri)=>{
+      const r=document.createElement('tr');
+      const th=document.createElement('th');th.style.textAlign='left';th.textContent=tokens[ri];r.appendChild(th);
+      row.forEach(v=>{
+        const td=document.createElement('td');
+        const cell=document.createElement('div');cell.className='att-cell';
+        cell.style.background='rgba(37,99,235,'+(0.08+v*0.8)+')';
+        cell.textContent=(v*100).toFixed(0)+'%';td.appendChild(cell);r.appendChild(td);
+      }); body.appendChild(r);
+    });
+    if(tokens.length){
+      const last=matrix[matrix.length-1];
+      let best=0; last.forEach((v,i)=>{if(v>last[best])best=i});
+      $('attentionInsight').textContent='เมื่อ Query = “'+tokens[tokens.length-1]+'” ค่าจำลองนี้ให้น้ำหนักกับ “'+tokens[best]+'” มากที่สุด ('+(last[best]*100).toFixed(1)+'%)';
+    }
+  }
+
+  function renderProbabilities(){
+    probs=softmaxCandidates();
+    const host=$('probabilities');host.innerHTML='';
+    probs.forEach(item=>{
+      const wrap=document.createElement('div');wrap.className='prob-row';
+      const top=document.createElement('div');top.className='prob-top';
+      top.innerHTML='<span>'+escapeHtml(item.word)+' <span class="muted">logit '+item.logit.toFixed(1)+'</span></span><span>'+(item.p*100).toFixed(1)+'%</span>';
+      const track=document.createElement('div');track.className='prob-track';
+      const fill=document.createElement('div');fill.className='prob-fill';fill.style.width=(item.p*100)+'%';track.appendChild(fill);
+      wrap.append(top,track);host.appendChild(wrap);
+    });
+    $('prediction').textContent=probs[0]?.word || '—';
+  }
+
+  function stageExplanation(){
+    const texts=[
+      'Input: รับข้อความที่ผู้ใช้ป้อนเข้ามา',
+      'Tokenization: แบ่งข้อความออกเป็นหน่วยย่อยที่โมเดลสามารถประมวลผลได้',
+      'Embedding: แปลงแต่ละ token ให้กลายเป็นเวกเตอร์ตัวเลข',
+      'Positional Encoding: เพิ่มข้อมูลตำแหน่ง เพราะ Transformer ไม่มี recurrence แบบ RNN (Recurrent Neural Network)',
+      'Self-Attention: สร้าง Q (Query), K (Key), V (Value) เพื่อคำนวณว่าแต่ละ token ควรสนใจ token อื่นมากแค่ไหน',
+      'Multi-Head Attention: ทำ Attention หลายชุดพร้อมกัน เพื่อเรียนรู้ความสัมพันธ์หลายรูปแบบ',
+      'FFN (Feed-Forward Network): แปลง representation ที่ได้จาก Attention ต่ออีกชั้น',
+      'Logits: โมเดลให้คะแนนดิบแก่ token ที่อาจเป็นคำถัดไป',
+      'Softmax: แปลง Logits ให้เป็น Probability รวมกันประมาณ 100%',
+      'Prediction: เลือก token ถัดไป จาก distribution ที่ได้'
+    ];
+    $('explanation').textContent=texts[stage];
+  }
+
+  function renderAll(){
+    renderPipeline();renderTokens();renderEmbeddings();renderAttention();renderProbabilities();
+    $('generatedText').textContent=tokens.join(' ');
+    $('tempValue').textContent=Number($('temperature').value).toFixed(1);
+    stageExplanation();
+  }
+
+  function apply(){
+    initial=$('prompt').value.trim() || 'I love';
+    tokens=tokenize(initial);stage=0;renderAll();
+  }
+
+  function step(){
+    if(stage<stages.length-1) stage++;
+    else stage=0;
+    renderAll();
+  }
+
+  function generate(){
+    probs=softmaxCandidates();
+    if(!probs.length)return;
+    const t=Number($('temperature').value);
+    let selected=probs[0];
+    if(t>1.15){
+      let r=Math.random();
+      for(const p of probs){r-=p.p;if(r<=0){selected=p;break}}
+    }
+    tokens.push(selected.word);stage=9;renderAll();
+    $('explanation').textContent='Prediction → “'+selected.word+'” ถูกต่อเข้ากับ sequence จากนั้น Transformer สามารถวนรอบใหม่เพื่อทำนาย token ถัดไป';
+  }
+
+  function togglePlay(){
+    playing=!playing;
+    $('playBtn').textContent=playing?'⏸ Pause':'▶ Play';
+    if(playing){
+      timer=setInterval(()=>{
+        if(stage<9){stage++;renderAll();}
+        else{generate();stage=0;renderAll();}
+      },900);
+    } else clearInterval(timer);
+  }
+
+  function reset(){
+    if(timer)clearInterval(timer);playing=false;$('playBtn').textContent='▶ Play';
+    $('prompt').value=initial || 'I love'; tokens=tokenize(initial || 'I love');stage=0;renderAll();
+  }
+
+  function escapeHtml(v){
+    return v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  $('applyBtn').addEventListener('click',apply);
+  $('stepBtn').addEventListener('click',step);
+  $('nextBtn').addEventListener('click',generate);
+  $('playBtn').addEventListener('click',togglePlay);
+  $('resetBtn').addEventListener('click',reset);
+  $('temperature').addEventListener('input',renderAll);
+  $('prompt').addEventListener('keydown',e=>{if(e.key==='Enter')apply()});
+
+  initial=$('prompt').value;tokens=tokenize(initial);renderAll();
+})();
+</script>
+</body>
+</html>
